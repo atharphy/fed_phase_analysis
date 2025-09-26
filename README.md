@@ -1,138 +1,97 @@
 # Bad Phase Analysis Tool
 
-This tool analyzes **FED phases** from **PixelFEDSupervisor** log files, identifying **"Weak"** and **"Dead"** fiber patterns based on RD patterns.  
-It also provides detector context (**BPIX / FPIX**) and lists the corresponding **ROCs** for easier diagnosis.  
+This tool analyzes FED phases from **PixelFEDSupervisor** log files, identifying **Weak** and **Dead** fiber patterns based on RD patterns, and maps them to detectors (**BPIX/ FPIX**) and corresponding ROC names.
 
 ---
 
-## Setup and Execution
+## How to Run
 
-### 1. Connect to the main server
-```bash
-ssh username@cmsusr
-```
+1. **Connect to the main server:**
+   ```bash
+   ssh username@cmsusr
+   ```
 
-### 2. Connect to the specific machine
-```bash
-ssh srv-s2b18-37-01
-```
+2. **Connect to the specific machine:**
+   ```bash
+   ssh srv-s2b18-37-01
+   ```
 
-### 3. Set up the TriDAS environment
-```bash
-cd /nfshome0/pixelpro/TriDAS/
-source setenv.sh
-```
+3. **Load the TriDAS environment:**
+   ```bash
+   cd /nfshome0/pixelpro/TriDAS/
+   source setenv.sh
+   ```
 
-### 4. Run the analysis script
-```bash
-python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py [OPTIONS]
-```
+4. **Run the script:**
+   ```bash
+   python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py [OPTIONS]
+   ```
 
 ---
 
-## Choosing Log Folder
+## Input Options
 
-You must provide **one of the following flags** to specify the log folder:
+You must provide one of the following to specify which log folder to analyze:
 
-- **`-last`**  
-  Use the **last created log folder** in:
+- `--last`  
+  Use the **latest** log folder from:
   ```
   /nfspixelraid/nfspixelraid/log0
   ```
-
-- **`-log0 LOGNAME`**  
-  Use a specific folder inside `log0`. Example:
+  Example:
   ```bash
-  python3 fed_phase_analysis.py -log0 Log_27Apr2025_13-45-22_GMT
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last
   ```
 
-- **`-other PATH`**  
-  Use a **custom folder path**. Example:
+- `--log0 LOGDIR`  
+  Use a specific log folder under `/nfspixelraid/nfspixelraid/log0`.  
+  Example:
   ```bash
-  python3 fed_phase_analysis.py -other /tmp/custom_logs
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --log0 Log_27Apr2025_13-45-22_GMT
+  ```
+
+- `--other PATH`  
+  Provide a full custom path to a log directory.  
+  Example:
+  ```bash
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --other /path/to/custom/logs
   ```
 
 ---
 
 ## Additional Flags
 
-- **`-run`**  
-  Group and display the output by **Run Number**.
+- `-run`  
+  Group and display results by **Run Number**.  
+  Example:
+  ```bash
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last -run
+  ```
 
-- **`-save`**  
-  Save the output summary into:
+- `-save`  
+  Save output summary as a text file under:
   ```
   /nfshome0/atahmad/bad_phase/
   ```
-
----
-
-## Example Usage
-
-- **Use last log folder (console output only):**
+  Example:
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -last
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last -save
   ```
 
-- **Analyze a specific folder in log0:**
+- Combine flags:  
+  Example (group by run number **and** save to file):
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -log0 Log_27Apr2025_13-45-22_GMT
-  ```
-
-- **Use a custom folder path:**
-  ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -other /tmp/custom_logs
-  ```
-
-- **Group results by Run Number and save output:**
-  ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -last -run -save
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last -run -save
   ```
 
 ---
 
 ## Output
 
-- With `-save`, the summary is written to:
+- If `-save` is used, the summary will be written to:
   ```
   /nfshome0/atahmad/bad_phase/FED_phases_<log_folder_name>.txt
   ```
+- If not, results are printed directly in the console.  
 
-- Without `-save`, the summary is only displayed in the terminal.
-
-The output table includes:
-
-| Column       | Description                                |
-|--------------|--------------------------------------------|
-| **State**    | Phase status: `Weak` or `Dead`            |
-| **FED**      | FED number                                |
-| **Fiber**    | Fiber number                              |
-| **Good Phases** | Number of good phases detected          |
-| **Detector** | Detector system: `BPIX` or `FPIX`         |
-| **ROCs**     | List of affected ROC(s), auto-wrapped     |
-
----
-
-## Quick Reference
-
-Most common commands:
-
-- Run on **last log folder**:
-  ```bash
-  python3 fed_phase_analysis.py -last
-  ```
-
-- Run on a **specific log0 folder**:
-  ```bash
-  python3 fed_phase_analysis.py -log0 Log_27Apr2025_13-45-22_GMT
-  ```
-
-- Run on a **custom path**:
-  ```bash
-  python3 fed_phase_analysis.py -other /path/to/logs
-  ```
-
-- Run on last log, **group by run and save**:
-  ```bash
-  python3 fed_phase_analysis.py -last -run -save
-  ```
+The output is formatted as a clean table with columns for **State, FED, Fiber, Good Phases, Detector, and ROCs**.
