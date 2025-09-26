@@ -190,7 +190,7 @@ if __name__ == "__main__":
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-last", action="store_true", help="Use last log folder in /nfspixelraid/nfspixelraid/log0")
-    group.add_argument("-log0", metavar="LOGNAME", help="Use /nfspixelraid/nfspixelraid/log0/LOGNAME")
+    group.add_argument("-log0", metavar="LOGDIR", help="Use /nfspixelraid/nfspixelraid/log0/LOGNAME")
     group.add_argument("-other", metavar="PATH", help="Use a custom log folder path")
     parser.add_argument("-run", action="store_true", help="Group and display data by run number.")
     parser.add_argument("-save", action="store_true", help="Save the output to a text file.")
