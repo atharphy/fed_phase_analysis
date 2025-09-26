@@ -33,28 +33,28 @@ This tool analyzes FED phases from **PixelFEDSupervisor** log files, identifying
 
 You must provide one of the following to specify which log folder to analyze:
 
-- `--last`  
+- `-last`  
   Use the **latest** log folder from:
   ```
   /nfspixelraid/nfspixelraid/log0
   ```
   Example:
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -last
   ```
 
-- `--log0 LOGDIR`  
+- `-log0 LOGDIR`  
   Use a specific log folder under `/nfspixelraid/nfspixelraid/log0`.  
   Example:
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --log0 Log_27Apr2025_13-45-22_GMT
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -log0 Log_27Apr2025_13-45-22_GMT
   ```
 
-- `--other PATH`  
+- `-other PATH`  
   Provide a full custom path to a log directory.  
   Example:
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --other /path/to/custom/logs
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -other /path/to/custom/logs
   ```
 
 ---
@@ -65,7 +65,7 @@ You must provide one of the following to specify which log folder to analyze:
   Group and display results by **Run Number**.  
   Example:
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last -run
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -last -run
   ```
 
 - `-save`  
@@ -75,13 +75,13 @@ You must provide one of the following to specify which log folder to analyze:
   ```
   Example:
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last -save
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -last -save
   ```
 
 - Combine flags:  
   Example (group by run number **and** save to file):
   ```bash
-  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py --last -run -save
+  python3 /nfshome0/pixelpro/opstools/scripts/fed_phase_analysis.py -last -run -save
   ```
 
 ---
