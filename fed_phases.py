@@ -1,0 +1,283 @@
+import os
+import re
+import argparse
+import sys
+import textwrap
+import subprocess
+
+if os.path.exists("/nfshome0/pixelpro/opstools/"):
+    OPSTOOLS_PATH = "/nfshome0/pixelpro/opstools/"
+elif os.path.exists("/home/bpix/opstools/"):
+    OPSTOOLS_PATH = "/home/bpix/opstools/"
+elif os.path.exists("/home/local14chstack/opstools/"):
+    OPSTOOLS_PATH = "/home/local14chstack/opstools/"
+else:
+    print("\nERROR: Cannot find a path to opstools\n")
+    exit(1)
+
+sys.path.append(OPSTOOLS_PATH + "config/")
+import ConfigTools as confTools
+
+
+FED_SUPERVISORS = {
+    "srv-s2b18-37-01": 1,
+    "srv-s2b18-34-01": 2,
+    "srv-s2b18-33-01": 3,
+    "srv-s2b18-32-01": 4,
+    "srv-s2b18-41-01": 5,
+    "srv-s2b18-40-01": 6,
+    "srv-s2b18-39-01": 7,
+    "srv-s2b18-38-01": 8,
+    "srv-s2b18-31-01": 9,
+    "srv-s2b18-30-01": 10,
+    "srv-s2b18-29-01": 11,
+    "srv-s2b18-28-01": 12,
+}
+
+
+def analyze_pattern(pattern):
+    zero_count = pattern.count("0")
+    if set(pattern) == {"0"} or set(pattern) == {"1"} or zero_count == 0:
+        return "Dead", 0
+    if zero_count < 10:
+        return "Weak", zero_count
+    return None, None
+
+
+def process_log_file(filepath, run_outputs, group_by_run, trans_dat, filter_state):
+    with open(filepath, "r") as file:
+        lines = file.readlines()
+    fed_number = None
+    current_phase_block = []
+    current_run = None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if group_by_run:
+            run_match = re.search(
+                r"PixelFEDSupervisor::startActionImpl\s+--\s+Run Number\s+:\s+(\d{6})", line
+            )
+            if run_match:
+                new_run = run_match.group(1)
+                if current_run:
+                    if current_run not in run_outputs:
+                        run_outputs[current_run] = []
+                    run_outputs[current_run].extend(current_phase_block)
+                    current_phase_block = []
+                current_run = new_run
+        fed_match = re.search(r"-+begin output-FED#(\d+)-+", line)
+        if fed_match:
+            fed_number = fed_match.group(1)
+        if re.search(r"Fiber\s+RDY\s+SET\s+RD\s+pattern:", line):
+            i += 1
+            while i < len(lines):
+                table_line = lines[i].strip()
+                if not re.match(r"^\d+\s+\d+", table_line):
+                    break
+                parts = re.split(r"\s+", table_line)
+                if len(parts) < 6 and i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    parts.extend(re.split(r"\s+", next_line))
+                    i += 1
+                if len(parts) >= 6:
+                    fiber_number = parts[0]
+                    pattern = parts[4]
+                    state, good_phases = analyze_pattern(pattern)
+                    if state in ("Weak", "Dead"):
+                        if filter_state and state != filter_state:
+                            i += 1
+                            continue
+                        rocs = []
+                        detector = ""
+                        if fed_number and fiber_number.isdigit():
+                            ch = (int(fiber_number) * 2) - 1
+                            try:
+                                roc1 = trans_dat.roc_name_from_fed_ch(int(fed_number), ch)
+                                roc2 = trans_dat.roc_name_from_fed_ch(int(fed_number), ch + 1)
+                                rocs = [roc1, roc2]
+                                if roc1.startswith("BPix"):
+                                    detector = "BPIX"
+                                elif roc1.startswith("FPix"):
+                                    detector = "FPIX"
+                            except Exception:
+                                rocs = []
+                                detector = "UNKNOWN"
+                        entry = f"{state}\t{fed_number}\t{fiber_number}\t{good_phases if state == 'Weak' else '0'}\t{detector}\t{','.join(rocs)}"
+                        if group_by_run:
+                            current_phase_block.append(entry)
+                        else:
+                            run_outputs.append(entry)
+                i += 1
+        else:
+            i += 1
+    if group_by_run and current_phase_block:
+        key = current_run if current_run else "No Run Number Found"
+        if key not in run_outputs:
+            run_outputs[key] = []
+        run_outputs[key].extend(current_phase_block)
+
+
+def format_row(parts, roc_width=82):
+    state, fed, fiber, phases, detector, rocs = parts
+    wrapped_rocs = textwrap.wrap(rocs, width=roc_width, subsequent_indent="")
+    lines = []
+    for idx, roc_line in enumerate(wrapped_rocs):
+        if idx == 0:
+            lines.append(
+                "| {:<6} | {:<4} | {:<5} | {:<11} | {:<8} | {:<{}s} |".format(
+                    state, fed, fiber, phases, detector, roc_line, roc_width
+                )
+            )
+        else:
+            lines.append(
+                "| {:<6} | {:<4} | {:<5} | {:<11} | {:<8} | {:<{}s} |".format(
+                    "", "", "", "", "", roc_line, roc_width
+                )
+            )
+    return lines
+
+
+def gather_latest_logs(temp_dir="/nfshome0/atahmad/temp_for_logs"):
+    os.makedirs(temp_dir, exist_ok=True)
+    gathered_files = []
+    for host, fed_id in FED_SUPERVISORS.items():
+        remote_path = f"/tmp/PixelFEDSupervisor{fed_id}-*.log"
+        try:
+            cmd = f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {host} 'ls -t {remote_path} 2>/dev/null | head -n1'"
+            latest_file = subprocess.check_output(
+                cmd, shell=True, universal_newlines=True
+            ).strip()
+            if latest_file:
+                subprocess.run(
+                    ["scp", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+                     f"{host}:{latest_file}", temp_dir],
+                    check=True
+                )
+                local_path = os.path.join(temp_dir, os.path.basename(latest_file))
+                gathered_files.append(local_path)
+                print(f"Copied {latest_file} from {host}")
+        except subprocess.CalledProcessError:
+            print(f"Warning: Could not fetch logs from {host}")
+    return temp_dir, gathered_files
+
+
+def main(directory, show_run, save_output, filter_state):
+    run_outputs = {} if show_run else []
+    pixconf = os.environ.get("PIXELCONFIGURATIONBASE")
+    if not pixconf:
+        raise RuntimeError("PIXELCONFIGURATIONBASE environment variable not set.")
+    trans_dat = confTools.translation_dat(
+        os.path.join(pixconf, "nametranslation/0/translation.dat")
+    )
+    output_folder = "/nfshome0/atahmad/bad_phase"
+    os.makedirs(output_folder, exist_ok=True)
+    dir_name = os.path.basename(os.path.normpath(directory))
+    custom_name = dir_name.replace("Log_", "") if dir_name.startswith("Log_") else "summary"
+    output_filename = os.path.join(output_folder, f"FED_phases_{custom_name}.txt")
+
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if "PixelFEDSupervisor" in file and file.endswith(".log"):
+                filepath = os.path.join(root, file)
+                print(f"Processing file: {filepath}")
+                process_log_file(filepath, run_outputs, show_run, trans_dat, filter_state)
+
+    roc_width = 82
+    header = "| {:<6} | {:<4} | {:<5} | {:<11} | {:<8} | {:<{}s} |".format(
+        "State", "FED", "Fiber", "Good Phases", "Detector", "ROCs", roc_width
+    )
+    table_width = len(header)
+    separator = "+" + "-" * (table_width - 2) + "+"
+    underline = "_" * table_width
+
+    if save_output:
+        out_file = open(output_filename, "w")
+    else:
+        out_file = None
+
+    def write_and_print(line):
+        print(line)
+        if out_file:
+            out_file.write(line + "\n")
+
+    if show_run:
+        for run_number in sorted(
+            run_outputs.keys(), key=lambda x: (x != "No Run Number Found", x)
+        ):
+            run_lines = run_outputs[run_number]
+            run_lines.sort(key=lambda x: int(x.split("\t")[1]))
+            title = f"{'Run Number: ' + run_number if run_number != 'No Run Number Found' else 'No Run Number Found'}"
+            write_and_print(f"\n{title}")
+            write_and_print(separator)
+            write_and_print(header)
+            write_and_print(separator)
+            for idx, line in enumerate(run_lines):
+                parts = line.split("\t")
+                for row in format_row(parts, roc_width):
+                    write_and_print(row)
+                if idx < len(run_lines) - 1:
+                    write_and_print(underline)
+            write_and_print(separator)
+
+    else:
+        run_outputs.sort(key=lambda x: int(x.split("\t")[1]))
+        write_and_print(separator)
+        write_and_print(header)
+        write_and_print(separator)
+        for idx, line in enumerate(run_outputs):
+            parts = line.split("\t")
+            for row in format_row(parts, roc_width):
+                write_and_print(row)
+            if idx < len(run_outputs) - 1:
+                write_and_print(underline)
+        write_and_print(separator)
+
+    if out_file:
+        out_file.close()
+        print(f"\nOutput written to: {output_filename}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Analyze bad FED phases in PixelFEDSupervisor log files."
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-last", action="store_true", help="Use last log folder in /nfspixelraid/nfspixelraid/log0")
+    group.add_argument("-log0", metavar="LOGDIR", help="Use /nfspixelraid/nfspixelraid/log0/LOGNAME")
+    group.add_argument("-other", metavar="PATH", help="Use a custom log folder path")
+    group.add_argument("-latest", action="store_true", help="Gather latest logs from all FED supervisors")
+    parser.add_argument("-run", action="store_true", help="Group and display data by run number.")
+    parser.add_argument("-save", action="store_true", help="Save the output to a text file.")
+
+    state_group = parser.add_mutually_exclusive_group()
+    state_group.add_argument("-dead", action="store_true", help="Show only Dead fibers")
+    state_group.add_argument("-weak", action="store_true", help="Show only Weak fibers")
+
+    args = parser.parse_args()
+
+    filter_state = None
+    if args.dead:
+        filter_state = "Dead"
+    elif args.weak:
+        filter_state = "Weak"
+
+    if args.last:
+        base_dir = "/nfspixelraid/nfspixelraid/log0"
+        subdirs = [os.path.join(base_dir, d) for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
+        if not subdirs:
+            raise RuntimeError("No log folders found in /nfspixelraid/nfspixelraid/log0")
+        directory = max(subdirs, key=os.path.getmtime)
+        main(directory, args.run, args.save, filter_state)
+    elif args.log0:
+        directory = os.path.join("/nfspixelraid/nfspixelraid/log0", args.log0)
+        main(directory, args.run, args.save, filter_state)
+    elif args.other:
+        directory = args.other
+        main(directory, args.run, args.save, filter_state)
+    elif args.latest:
+        temp_dir, copied_files = gather_latest_logs()
+        try:
+            main(temp_dir, args.run, args.save, filter_state)
+        finally:
+            for f in copied_files:
+                os.remove(f)
