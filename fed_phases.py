@@ -4,6 +4,8 @@ import argparse
 import sys
 import textwrap
 import subprocess
+import tempfile
+import shutil
 
 if os.path.exists("/nfshome0/pixelpro/opstools/"):
     OPSTOOLS_PATH = "/nfshome0/pixelpro/opstools/"
@@ -137,8 +139,8 @@ def format_row(parts, roc_width=82):
     return lines
 
 
-def gather_latest_logs(temp_dir="/nfshome0/atahmad/temp_for_logs"):
-    os.makedirs(temp_dir, exist_ok=True)
+def gather_latest_logs():
+    temp_dir = tempfile.mkdtemp(prefix="temp_for_logs_", dir="/globalscratch")
     gathered_files = []
     for host, fed_id in FED_SUPERVISORS.items():
         remote_path = f"/tmp/PixelFEDSupervisor{fed_id}-*.log"
@@ -160,7 +162,6 @@ def gather_latest_logs(temp_dir="/nfshome0/atahmad/temp_for_logs"):
             print(f"Warning: Could not fetch logs from {host}")
     return temp_dir, gathered_files
 
-
 def main(directory, show_run, save_output, filter_state):
     run_outputs = {} if show_run else []
     pixconf = os.environ.get("PIXELCONFIGURATIONBASE")
@@ -169,7 +170,7 @@ def main(directory, show_run, save_output, filter_state):
     trans_dat = confTools.translation_dat(
         os.path.join(pixconf, "nametranslation/0/translation.dat")
     )
-    output_folder = "/nfshome0/atahmad/bad_phase"
+    output_folder = "/globalscratch"
     os.makedirs(output_folder, exist_ok=True)
     dir_name = os.path.basename(os.path.normpath(directory))
     custom_name = dir_name.replace("Log_", "") if dir_name.startswith("Log_") else "summary"
@@ -275,9 +276,8 @@ if __name__ == "__main__":
         directory = args.other
         main(directory, args.run, args.save, filter_state)
     elif args.latest:
-        temp_dir, copied_files = gather_latest_logs()
+        temp_dir, _ = gather_latest_logs()
         try:
             main(temp_dir, args.run, args.save, filter_state)
         finally:
-            for f in copied_files:
-                os.remove(f)
+            shutil.rmtree(temp_dir, ignore_errors=True)
