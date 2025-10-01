@@ -139,8 +139,8 @@ def format_row(parts, roc_width=82):
     return lines
 
 
-def gather_latest_logs():
-    temp_dir = tempfile.mkdtemp(prefix="temp_for_logs_", dir="/globalscratch")
+def gather_latest_logs(temp_dir="/globalscratch/temp_for_logs"):
+    os.makedirs(temp_dir, exist_ok=True)
     gathered_files = []
     for host, fed_id in FED_SUPERVISORS.items():
         remote_path = f"/tmp/PixelFEDSupervisor{fed_id}-*.log"
@@ -160,7 +160,10 @@ def gather_latest_logs():
                 print(f"Copied {latest_file} from {host}")
         except subprocess.CalledProcessError:
             print(f"Warning: Could not fetch logs from {host}")
+    if not gathered_files:
+        print("No log files were gathered from any FED supervisors as none could be found.")
     return temp_dir, gathered_files
+
 
 def main(directory, show_run, save_output, filter_state):
     run_outputs = {} if show_run else []
@@ -246,7 +249,7 @@ if __name__ == "__main__":
     group.add_argument("-last", action="store_true", help="Use last log folder in /nfspixelraid/nfspixelraid/log0")
     group.add_argument("-log0", metavar="LOGDIR", help="Use /nfspixelraid/nfspixelraid/log0/LOGNAME")
     group.add_argument("-other", metavar="PATH", help="Use a custom log folder path")
-    group.add_argument("-latest", action="store_true", help="Gather latest logs from all FED supervisors")
+    group.add_argument("-current", action="store_true", help="Gather current logs from all FED supervisors")
     parser.add_argument("-run", action="store_true", help="Group and display data by run number.")
     parser.add_argument("-save", action="store_true", help="Save the output to a text file.")
 
@@ -275,9 +278,14 @@ if __name__ == "__main__":
     elif args.other:
         directory = args.other
         main(directory, args.run, args.save, filter_state)
-    elif args.latest:
-        temp_dir, _ = gather_latest_logs()
-        try:
-            main(temp_dir, args.run, args.save, filter_state)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+    elif args.current:
+        temp_dir, copied_files = gather_latest_logs()
+        if not copied_files:
+            print("No logs to process. Exiting.")
+        else:
+            try:
+                main(temp_dir, args.run, args.save, filter_state)
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                print(f"Temporary directory {temp_dir} removed.")
+
