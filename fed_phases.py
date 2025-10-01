@@ -162,9 +162,9 @@ def gather_latest_logs(base_dir="/globalscratch"):
                 gathered_files.append(local_path)
                 print(f"Copied {latest_file} from {host}")
         except subprocess.CalledProcessError:
-            print(f"Warning: Could not fetch logs from {host}")
+            print(f"Warning: Could not fetch logs from {host}")    
     if not gathered_files:
-        print("No log files were gathered from any FED supervisors as none could be found.")
+        print("No log files were gathered from any FED supervisors as none could be found, try using -last instead.")
     return temp_dir, gathered_files
 
 
