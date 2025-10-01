@@ -6,6 +6,7 @@ import textwrap
 import subprocess
 import tempfile
 import shutil
+from datetime import datetime
 
 if os.path.exists("/nfshome0/pixelpro/opstools/"):
     OPSTOOLS_PATH = "/nfshome0/pixelpro/opstools/"
@@ -139,7 +140,9 @@ def format_row(parts, roc_width=82):
     return lines
 
 
-def gather_latest_logs(temp_dir="/globalscratch/temp_for_logs"):
+def gather_latest_logs(base_dir="/globalscratch"):
+    timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    temp_dir = os.path.join(base_dir, f"temp_for_logs_{timestamp}")
     os.makedirs(temp_dir, exist_ok=True)
     gathered_files = []
     for host, fed_id in FED_SUPERVISORS.items():
